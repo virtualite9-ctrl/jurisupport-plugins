@@ -152,6 +152,7 @@ claude
 | [04_lbox_workflow.md](guides/04_lbox_workflow.md) | lbox.kr 직접 검색 워크플로우 |
 | [05_beopgoeul_workflow.md](guides/05_beopgoeul_workflow.md) | 법고을 직접 검색 워크플로우 (수동) |
 | [06_precedent_search.md](guides/06_precedent_search.md) | 판례 검색 통합 — 법고을 자동 → lbox 폴백 |
+| [07_hermes_local_workflow.md](guides/07_hermes_local_workflow.md) | Hermes 로컬 송무 검색 워크플로우 — local embeddings, legal-books, case-records |
 
 ### 메타
 
