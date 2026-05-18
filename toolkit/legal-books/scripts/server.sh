@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Manage legal-books search server (port 8766)
+# Manage legal-books search server (default port 18766)
 
 set -euo pipefail
 
@@ -7,6 +7,14 @@ ROOT="$HOME/legal-books"
 VENV="$ROOT/.venv/bin/activate"
 PIDFILE="$ROOT/logs/server.pid"
 LOGFILE="$ROOT/logs/server.log"
+SECRETS="$HOME/.jurisupport/secrets.env"
+if [[ -f "$SECRETS" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$SECRETS"
+  set +a
+fi
+PORT="${JURISUPPORT_LEGAL_BOOKS_PORT:-18766}"
 
 start() {
   if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
@@ -33,7 +41,7 @@ stop() {
 status() {
   if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
     echo "Running (PID $(cat "$PIDFILE"))"
-    curl -s http://localhost:8766/health || true
+    curl -s "http://localhost:${PORT}/health" || true
   else
     echo "Not running"
   fi

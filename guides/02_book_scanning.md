@@ -37,7 +37,7 @@
 ├── db/
 │   └── books_fts.db                     ← SQLite FTS5 + 임베딩 DB
 ├── server/
-│   └── server.py                        ← 검색 API (포트 8766)
+│   └── server.py                        ← 검색 API (포트 18766)
 └── scripts/
     ├── add_book.sh                      ← 책 한 권 추가
     └── reindex.sh                       ← 전체 재인덱싱
@@ -56,11 +56,18 @@ brew install python@3.11 ocrmypdf poppler tesseract tesseract-lang
 sudo apt install python3.11 python3.11-venv ocrmypdf poppler-utils tesseract-ocr tesseract-ocr-kor
 ```
 
-### Step 2. Gemini API 키 발급 (무료 한도 충분)
+### Step 2. 로컬 임베딩 엔드포인트 준비
 
-1. https://aistudio.google.com/apikey 접속
-2. "Create API key" 클릭
-3. 발급된 키 복사
+기본 설정은 `~/.jurisupport/secrets.env`에 저장됩니다.
+
+```bash
+JURISUPPORT_EMBEDDING_PROVIDER=openai
+JURISUPPORT_EMBEDDING_BASE_URL=http://127.0.0.1:3333/v1
+JURISUPPORT_EMBEDDING_MODEL=local-embedding
+JURISUPPORT_EMBEDDING_API_KEY=no-key-required
+```
+
+로컬 엔드포인트가 `/v1/embeddings`를 지원하지 않으면 임시로 `JURISUPPORT_EMBEDDING_PROVIDER=hash`를 사용할 수 있습니다.
 
 ### Step 3. 본 패키지의 자동 설치 스크립트 실행
 
@@ -73,13 +80,13 @@ cd ~/jurisupport-plugins/toolkit/legal-books
 - `~/legal-books/` 디렉토리 생성
 - Python venv + 의존성 설치
 - 빈 SQLite DB 초기화
-- Gemini API 키 등록 (입력 요구)
+- 로컬 임베딩 엔드포인트 설정 등록
 - 검색 서버 자동 실행 등록 (launchd / systemd)
 
 ### Step 4. 검색 서버 작동 확인
 
 ```bash
-curl -s http://localhost:8766/health
+curl -s http://localhost:18766/health
 # → {"status":"ok","books":0,"chunks":0}
 ```
 
@@ -126,16 +133,16 @@ curl -s http://localhost:8766/health
 1. PDF에 OCR 적용 (한국어)
 2. 마크다운 변환 (구조 인식)
 3. 청크 분할 (1000자 단위, 200자 오버랩)
-4. Gemini로 임베딩 생성
+4. 로컬 임베딩 생성
 5. DB에 삽입
 
 진행 시간 (대략):
-- 500쪽 책: OCR 10분 + 임베딩 5분 = 15분
+- 500쪽 책: OCR 10분 + 임베딩 수 분 (로컬 엔드포인트 성능에 따라 변동)
 
 ### Step 3. 검색 확인
 
 ```bash
-curl -s -X POST http://localhost:8766/search \
+curl -s -X POST http://localhost:18766/search \
   -H "Content-Type: application/json" \
   -d '{"query": "소멸시효 채무승인", "top_k": 5}'
 ```
@@ -197,10 +204,8 @@ ls ~/.claude/skills/legal-books/SKILL.md
 ## 데이터 보호
 
 - 책 PDF·청크는 **모두 로컬 저장** (외부 전송 없음)
-- 검색 시 **쿼리만 Gemini API로 임베딩 변환** (책 본문은 전송 X)
-- Gemini 학습 옵트인 OFF (기본)
-
-→ 그래도 우려되면: Gemini API 대신 로컬 임베딩 모델 (sentence-transformers) 사용 옵션 — `install.sh` 실행 시 선택 가능.
+- 임베딩은 기본적으로 **로컬 OpenAI-compatible 엔드포인트**로 생성
+- 엔드포인트가 `/v1/embeddings`를 지원하지 않으면 `JURISUPPORT_EMBEDDING_PROVIDER=hash`로 임시 lexical fallback 가능
 
 ---
 
@@ -209,7 +214,7 @@ ls ~/.claude/skills/legal-books/SKILL.md
 | 증상 | 해결 |
 |---|---|
 | OCR이 한글 깨짐 | `tesseract-ocr-kor` 설치 확인 |
-| 임베딩 API 호출 실패 | Gemini API 키 만료/오타 확인 (`~/.jurisupport/secrets.env`) |
+| 임베딩 API 호출 실패 | `~/.jurisupport/secrets.env`의 `JURISUPPORT_EMBEDDING_*` 설정과 `/v1/embeddings` 지원 여부 확인 |
 | 검색 결과 0건 | DB 빈 상태 → 책 추가 / 또는 쿼리 키워드 변경 |
 | 서버 죽음 | `~/jurisupport-plugins/toolkit/legal-books/scripts/server.sh restart` |
 

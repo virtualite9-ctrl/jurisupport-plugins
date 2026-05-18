@@ -75,4 +75,5 @@ python3 "$ROOT/scripts/ingest.py" \
 echo "[add_book] Step 3/3: Done. Book $BOOK_ID indexed."
 echo ""
 echo "Search test:"
-echo "  curl -X POST http://localhost:8766/search -H 'Content-Type: application/json' -d '{\"query\":\"$TITLE\",\"top_k\":3}'"
+PORT="${JURISUPPORT_LEGAL_BOOKS_PORT:-18766}"
+echo "  curl -X POST http://localhost:${PORT}/search -H 'Content-Type: application/json' -d '{\"query\":\"$TITLE\",\"top_k\":3}'"

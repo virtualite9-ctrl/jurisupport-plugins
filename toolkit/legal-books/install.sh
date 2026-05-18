@@ -5,7 +5,7 @@
 # - ~/legal-books/ directory structure
 # - Python venv with required packages
 # - Empty SQLite DB
-# - Gemini API key registration
+# - Local OpenAI-compatible embedding endpoint config
 # - Search server start script
 
 set -euo pipefail
@@ -39,22 +39,30 @@ check_cmd() {
   fi
 }
 
-check_cmd python3 "먼저 Python 3.10+ 설치."
 check_cmd ocrmypdf "설치: brew install ocrmypdf (Mac) 또는 apt install ocrmypdf (Linux)"
 check_cmd tesseract "설치: brew install tesseract tesseract-lang (Mac) 또는 apt install tesseract-ocr tesseract-ocr-kor (Linux)"
 check_cmd curl "curl 필요."
+select_python() {
+  local candidate ver major minor
+  for candidate in python3.13 python3.12 python3.11 python3.10 python3; do
+    if ! command -v "$candidate" >/dev/null 2>&1; then
+      continue
+    fi
+    ver=$("$candidate" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+    major=${ver%%.*}; minor=${ver#*.}
+    if [[ "$major" -eq 3 && "$minor" -ge 10 && "$minor" -le 13 ]]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+PYTHON_BIN=$(select_python) || error "Python 3.10~3.13 필요. Python 3.14는 일부 고정 패키지(pydantic-core)가 아직 미지원입니다."
+info "Python 사용: $PYTHON_BIN ($($PYTHON_BIN --version 2>&1))"
 
 # Check Tesseract Korean
 if ! tesseract --list-langs 2>&1 | grep -q "kor"; then
   error "Tesseract 한국어 언어팩 미설치. Mac: brew install tesseract-lang. Linux: apt install tesseract-ocr-kor"
-fi
-
-# Check Python version >= 3.10
-PYV=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-PYMAJ=$(echo "$PYV" | cut -d. -f1)
-PYMIN=$(echo "$PYV" | cut -d. -f2)
-if [[ "$PYMAJ" -lt 3 ]] || [[ "$PYMAJ" -eq 3 && "$PYMIN" -lt 10 ]]; then
-  error "Python 3.10 이상 필요 (현재 $PYV)"
 fi
 
 # ============================================================
@@ -69,14 +77,14 @@ mkdir -p "$ROOT/books" "$ROOT/db" "$ROOT/server" "$ROOT/scripts" "$ROOT/logs"
 # ============================================================
 info "Python 가상환경 생성"
 # Ubuntu/Debian은 python3-venv 별도 설치 필요
-if [[ "$PLATFORM" == "linux" ]] && ! python3 -c "import ensurepip" 2>/dev/null; then
+if [[ "$PLATFORM" == "linux" ]] && ! "$PYTHON_BIN" -c "import ensurepip" 2>/dev/null; then
   info "python3-venv 자동 설치 중..."
-  PYV=$(python3 -c 'import sys; print(f"python3.{sys.version_info.minor}-venv")')
+  PYV=$("$PYTHON_BIN" -c 'import sys; print(f"python3.{sys.version_info.minor}-venv")')
   sudo apt-get install -y "$PYV" python3-venv 2>&1 | tail -3 || \
     sudo apt-get install -y python3-venv 2>&1 | tail -3
-  python3 -c "import ensurepip" 2>/dev/null || error "python3-venv 설치 실패. 수동: sudo apt install python3-venv"
+  "$PYTHON_BIN" -c "import ensurepip" 2>/dev/null || error "python3-venv 설치 실패. 수동: sudo apt install python3-venv"
 fi
-python3 -m venv "$ROOT/.venv"
+"$PYTHON_BIN" -m venv "$ROOT/.venv"
 # shellcheck disable=SC1091
 source "$ROOT/.venv/bin/activate"
 
@@ -87,7 +95,6 @@ pip install --quiet \
   uvicorn==0.31.0 \
   pydantic==2.9.2 \
   sqlite-utils==3.37 \
-  google-genai==0.3.0 \
   pypdf==5.0.1 \
   numpy==1.26.4 \
   python-dotenv==1.0.1
@@ -125,29 +132,32 @@ print("DB 초기화 완료:", db_path)
 PY
 
 # ============================================================
-# Secrets (Gemini API key)
+# Local embedding endpoint config (OpenAI-compatible)
 # ============================================================
 SECRETS="$HOME/.jurisupport/secrets.env"
 mkdir -p "$(dirname "$SECRETS")"
 chmod 700 "$(dirname "$SECRETS")"
+touch "$SECRETS"
+chmod 600 "$SECRETS"
 
-if [[ -f "$SECRETS" ]] && grep -q "GEMINI_API_KEY" "$SECRETS"; then
-  info "Gemini API 키 이미 등록됨: $SECRETS"
-else
-  echo ""
-  echo "================================================================"
-  echo "  Gemini API 키 등록"
-  echo "  무료 키 발급: https://aistudio.google.com/apikey"
-  echo "================================================================"
-  read -r -p "Gemini API 키 입력 (건너뛰려면 Enter): " GEMINI_KEY
-  if [[ -n "${GEMINI_KEY:-}" ]]; then
-    echo "GEMINI_API_KEY=${GEMINI_KEY}" >> "$SECRETS"
-    chmod 600 "$SECRETS"
-    info "저장 완료: $SECRETS (chmod 600)"
+ensure_secret() {
+  local key="$1" value="$2"
+  if grep -q "^${key}=" "$SECRETS"; then
+    info "${key} 이미 설정됨: $SECRETS"
   else
-    warn "건너뛰기. 나중에 $SECRETS 에 GEMINI_API_KEY=xxx 추가."
+    echo "${key}=${value}" >> "$SECRETS"
+    info "${key} 기본값 저장: ${value}"
   fi
-fi
+}
+
+ensure_secret "JURISUPPORT_EMBEDDING_PROVIDER" "openai"
+ensure_secret "JURISUPPORT_EMBEDDING_BASE_URL" "http://127.0.0.1:3333/v1"
+ensure_secret "JURISUPPORT_EMBEDDING_MODEL" "local-embedding"
+ensure_secret "JURISUPPORT_EMBEDDING_API_KEY" "no-key-required"
+ensure_secret "JURISUPPORT_LEGAL_BOOKS_PORT" "18766"
+
+warn "로컬 엔드포인트가 /v1/embeddings를 제공해야 의미 검색이 작동합니다."
+warn "미지원 시 임시 fallback: JURISUPPORT_EMBEDDING_PROVIDER=hash"
 
 # ============================================================
 # Copy server and scripts from toolkit
@@ -155,9 +165,11 @@ fi
 TOOLKIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 info "서버·스크립트 복사 중"
 cp "$TOOLKIT_DIR/server/server.py" "$ROOT/server/server.py"
+cp "$TOOLKIT_DIR/../shared/embedding_provider.py" "$ROOT/server/embedding_provider.py"
 cp "$TOOLKIT_DIR/scripts/add_book.sh" "$ROOT/scripts/add_book.sh"
 cp "$TOOLKIT_DIR/scripts/server.sh" "$ROOT/scripts/server.sh"
 cp "$TOOLKIT_DIR/scripts/ingest.py" "$ROOT/scripts/ingest.py"
+cp "$TOOLKIT_DIR/../shared/embedding_provider.py" "$ROOT/scripts/embedding_provider.py"
 chmod +x "$ROOT/scripts/"*.sh
 
 # ============================================================
@@ -171,12 +183,14 @@ cp "$TOOLKIT_DIR/../../skills/legal-books/SKILL.md" "$SKILL_DST/SKILL.md"
 # ============================================================
 # Start server (background)
 # ============================================================
-info "검색 서버 시작 (포트 8766)"
+info "검색 서버 시작 (포트 ${JURISUPPORT_LEGAL_BOOKS_PORT:-18766})"
 "$ROOT/scripts/server.sh" start
 
 sleep 2
-if curl -sf http://localhost:8766/health >/dev/null; then
-  info "서버 실행 중. 확인: curl http://localhost:8766/health"
+LEGAL_BOOKS_PORT=$(grep -E "^JURISUPPORT_LEGAL_BOOKS_PORT=" "$SECRETS" | tail -1 | cut -d= -f2-)
+LEGAL_BOOKS_PORT="${LEGAL_BOOKS_PORT:-18766}"
+if curl -sf "http://localhost:${LEGAL_BOOKS_PORT}/health" >/dev/null; then
+  info "서버 실행 중. 확인: curl http://localhost:${LEGAL_BOOKS_PORT}/health"
 else
   warn "서버 응답 없음. 로그 확인: $ROOT/logs/server.log"
 fi
@@ -198,7 +212,7 @@ cat <<EOF
          --author "곽윤직" --title "민법총칙" \\
          --edition "제9판" --year 2018 --publisher "박영사"
   3. 검색 테스트:
-       curl -X POST http://localhost:8766/search \\
+       curl -X POST http://localhost:18766/search \\
          -H 'Content-Type: application/json' \\
          -d '{"query":"소멸시효","top_k":3}'
   4. 클로드코드에서:

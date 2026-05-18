@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-legal-books search API (port 8766)
+legal-books search API (default port 18766; configurable via JURISUPPORT_LEGAL_BOOKS_PORT)
 
 Endpoints:
   GET  /health              → {"status":"ok", "books":N, "chunks":N}
@@ -35,17 +35,12 @@ def get_db():
 
 
 def embed_query(q: str) -> np.ndarray:
-    """Get single embedding from Gemini."""
-    from google import genai
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise HTTPException(500, "GEMINI_API_KEY not set")
-    client = genai.Client(api_key=api_key)
-    result = client.models.embed_content(
-        model="text-embedding-004",
-        contents=[q],
-    )
-    return np.array(result.embeddings[0].values, dtype=np.float32)
+    """Get single embedding from local OpenAI-compatible provider."""
+    try:
+        from embedding_provider import embed_text
+        return np.array(embed_text(q), dtype=np.float32)
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
 
 
 def cosine(a: np.ndarray, b: np.ndarray) -> float:
@@ -157,4 +152,5 @@ def search(req: SearchReq):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8766)
+    port = int(os.environ.get("JURISUPPORT_LEGAL_BOOKS_PORT", "18766"))
+    uvicorn.run(app, host="127.0.0.1", port=port)

@@ -18,7 +18,7 @@
 #
 # 자동화 불가:
 #   - Claude Pro 가입·결제 (https://claude.ai/upgrade 미리 가입)
-#   - Gemini API 키 발급 (선택, https://aistudio.google.com/apikey)
+#   - 로컬 OpenAI-compatible 임베딩 엔드포인트 (선택 toolkit용)
 
 set -euo pipefail
 
@@ -222,7 +222,7 @@ ${BLUE}[2/2] 본 패키지 설치 (install.sh)${NC}
     ./install.sh
 
 → 데이터 보호 Hook + songmu-legal 플러그인 + 스킬 자동 등록.
-   legal-books·case-records·법고을 toolkit은 선택 설치 (Gemini API 키·Chrome 필요).
+   legal-books·case-records·법고을 toolkit은 선택 설치 (로컬 임베딩 엔드포인트·Chrome 필요).
 
 자세한 가이드:
   - 콜드스타트:        ~/jurisupport-plugins/COLD_START.md

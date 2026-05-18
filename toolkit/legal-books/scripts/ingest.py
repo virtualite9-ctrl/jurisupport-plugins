@@ -6,7 +6,7 @@ Steps:
 1. Extract text from PDF (page-by-page)
 2. Write markdown (1 file per book)
 3. Chunk text (~1000 chars, 200 overlap)
-4. Generate Gemini embeddings (batched)
+4. Generate local OpenAI-compatible embeddings (batched)
 5. Insert into SQLite (books + chunks + FTS5)
 """
 
@@ -61,26 +61,10 @@ def chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP):
 
 
 def embed_batch(texts: list[str]) -> list[list[float]]:
-    """Get Gemini embeddings (text-embedding-004, 768-dim free tier)."""
-    from google import genai
+    """Get embeddings from local OpenAI-compatible provider."""
+    from embedding_provider import embed_texts
 
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "GEMINI_API_KEY not set. Add to ~/.jurisupport/secrets.env"
-        )
-    client = genai.Client(api_key=api_key)
-    # Batch up to 100 per request
-    out = []
-    for i in range(0, len(texts), 100):
-        batch = texts[i:i + 100]
-        result = client.models.embed_content(
-            model="text-embedding-004",
-            contents=batch,
-        )
-        out.extend([e.values for e in result.embeddings])
-        time.sleep(0.5)  # rate limit cushion
-    return out
+    return embed_texts(texts)
 
 
 def main():
@@ -139,7 +123,7 @@ def main():
         sys.exit(1)
 
     # Embed
-    print("  [ingest] Generating embeddings (Gemini)...", flush=True)
+    print("  [ingest] Generating embeddings (local provider)...", flush=True)
     texts = [c["chunk_text"] for c in all_chunks]
     embeddings = embed_batch(texts)
     print(f"  [ingest] {len(embeddings)} embeddings generated", flush=True)

@@ -47,7 +47,7 @@
 ├── db/
 │   └── cases_fts.db                      ← SQLite FTS5 + 임베딩
 ├── server/
-│   └── server.py                         ← 검색 API (포트 8767)
+│   └── server.py                         ← 검색 API (포트 18767)
 └── scripts/
     ├── ingest_case.sh                    ← 사건 1건 인덱싱
     ├── ingest_all.sh                     ← 사건폴더 일괄 인덱싱
@@ -65,7 +65,7 @@ cd ~/jurisupport-plugins/toolkit/case-records
 ./install.sh
 ```
 
-내부적으로 legal-books toolkit과 거의 동일한 구조 (Python venv, SQLite, Gemini 임베딩). Gemini API 키는 legal-books가 이미 등록했다면 그대로 재사용.
+내부적으로 legal-books toolkit과 거의 동일한 구조 (Python venv, SQLite, 로컬 OpenAI-compatible 임베딩). 임베딩 엔드포인트 설정은 `~/.jurisupport/secrets.env`를 공유합니다.
 
 ---
 
@@ -87,7 +87,7 @@ cd ~/jurisupport-plugins/toolkit/case-records
 2. kordoc 또는 자체 변환기로 텍스트 추출
 3. 파일명 메타파싱 (사건번호·문서종류·일자·당사자 추출)
 4. 청크 분할 (1500자, 300자 오버랩)
-5. Gemini 임베딩
+5. 로컬 임베딩 생성
 6. DB 삽입
 
 ### 사건폴더 전체 일괄
@@ -169,7 +169,8 @@ cd ~/jurisupport-plugins/toolkit/case-records
 ## 데이터 보호
 
 - 사건기록은 **모두 로컬 저장** (외부 전송 없음)
-- 검색 시 **쿼리만 Gemini 임베딩 변환** (사건 본문은 전송 X)
+- 임베딩은 기본적으로 **로컬 OpenAI-compatible 엔드포인트**로 생성
+- 로컬 엔드포인트가 `/v1/embeddings`를 지원하지 않으면 `JURISUPPORT_EMBEDDING_PROVIDER=hash`로 임시 lexical fallback 가능
 - 본 패키지의 **데이터 보호 Hook** 활성화 → 외부 도구로 사건자료 유출 시도 자동 차단
 
 ---

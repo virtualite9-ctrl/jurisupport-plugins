@@ -19,14 +19,14 @@ metadata:
 
 ## legal-books와의 차이
 
-- **legal-books** (포트 8766): 교과서 → "법리가 무엇인가"
-- **case-records** (포트 8767): 사건기록 → "우리가 어떻게 주장했고 법원이 어떻게 판단했는가"
+- **legal-books** (포트 18766): 교과서 → "법리가 무엇인가"
+- **case-records** (포트 18767): 사건기록 → "우리가 어떻게 주장했고 법원이 어떻게 판단했는가"
 - 서면 작성 시 **둘 다 검색** 권장
 
 ## 사전 확인
 
 ```bash
-curl -s http://localhost:8767/health
+curl -s http://localhost:18767/health
 ```
 
 - 서버 미응답 → 사용자에게 실행 요청
@@ -36,7 +36,7 @@ curl -s http://localhost:8767/health
 ## 검색 API
 
 ```bash
-curl -s -X POST http://localhost:8767/search \
+curl -s -X POST http://localhost:18767/search \
   -H "Content-Type: application/json" \
   -d '{"query": "검색어", "top_k": 5, "filters": {"doc_type": "준비서면"}}'
 ```

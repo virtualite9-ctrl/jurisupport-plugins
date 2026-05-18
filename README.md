@@ -104,8 +104,9 @@ claude
 2. **클로드코드 설치** — https://docs.claude.com/claude-code
 3. **Homebrew** (macOS) 또는 apt (Linux)
 4. **Python 3.9+** (3.10+ 권장)
-5. **Google Gemini API 키** (무료 한도 충분) — https://aistudio.google.com/apikey
-   - legal-books·case-records 임베딩 생성용 (해당 toolkit 설치 시만)
+5. **로컬 OpenAI-compatible 임베딩 엔드포인트** (권장: 로컬 LLM/임베딩 서버)
+   - legal-books·case-records 임베딩 생성용. 기본값은 `http://127.0.0.1:3333/v1` + `JURISUPPORT_EMBEDDING_MODEL=local-embedding`이며 `~/.jurisupport/secrets.env`에서 변경합니다.
+   - 엔드포인트가 `/v1/embeddings`를 지원하지 않으면 임시 fallback으로 `JURISUPPORT_EMBEDDING_PROVIDER=hash` 사용 가능.
 6. **Google Chrome** — beopgoeul-search toolkit용 (Selenium)
 
 ---

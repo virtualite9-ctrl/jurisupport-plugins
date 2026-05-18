@@ -19,8 +19,24 @@ esac
 info "플랫폼: $PLATFORM"
 
 # Prerequisites
-command -v python3 >/dev/null || error "Python 3.10 이상 필요"
 command -v curl >/dev/null || error "curl 필요"
+select_python() {
+  local candidate ver major minor
+  for candidate in python3.13 python3.12 python3.11 python3.10 python3; do
+    if ! command -v "$candidate" >/dev/null 2>&1; then
+      continue
+    fi
+    ver=$("$candidate" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+    major=${ver%%.*}; minor=${ver#*.}
+    if [[ "$major" -eq 3 && "$minor" -ge 10 && "$minor" -le 13 ]]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+PYTHON_BIN=$(select_python) || error "Python 3.10~3.13 필요. Python 3.14는 일부 고정 패키지(pydantic-core)가 아직 미지원입니다."
+info "Python 사용: $PYTHON_BIN ($($PYTHON_BIN --version 2>&1))"
 
 ROOT="$HOME/case-records"
 info "디렉토리 생성: $ROOT"
@@ -28,20 +44,20 @@ mkdir -p "$ROOT/cases" "$ROOT/db" "$ROOT/server" "$ROOT/scripts" "$ROOT/logs"
 
 info "Python 가상환경 생성"
 # Ubuntu/Debian은 python3-venv 별도 설치 필요
-if [[ "$PLATFORM" == "linux" ]] && ! python3 -c "import ensurepip" 2>/dev/null; then
+if [[ "$PLATFORM" == "linux" ]] && ! "$PYTHON_BIN" -c "import ensurepip" 2>/dev/null; then
   info "python3-venv 자동 설치 중..."
-  PYV=$(python3 -c 'import sys; print(f"python3.{sys.version_info.minor}-venv")')
+  PYV=$("$PYTHON_BIN" -c 'import sys; print(f"python3.{sys.version_info.minor}-venv")')
   sudo apt-get install -y "$PYV" python3-venv 2>&1 | tail -3 || \
     sudo apt-get install -y python3-venv 2>&1 | tail -3
-  python3 -c "import ensurepip" 2>/dev/null || error "python3-venv 설치 실패. 수동: sudo apt install python3-venv"
+  "$PYTHON_BIN" -c "import ensurepip" 2>/dev/null || error "python3-venv 설치 실패. 수동: sudo apt install python3-venv"
 fi
-python3 -m venv "$ROOT/.venv"
+"$PYTHON_BIN" -m venv "$ROOT/.venv"
 # shellcheck disable=SC1091
 source "$ROOT/.venv/bin/activate"
 pip install --quiet --upgrade pip
 pip install --quiet \
   fastapi==0.115.0 uvicorn==0.31.0 pydantic==2.9.2 \
-  sqlite-utils==3.37 google-genai==0.3.0 pypdf==5.0.1 \
+  sqlite-utils==3.37 pypdf==5.0.1 \
   numpy==1.26.4 python-dotenv==1.0.1 python-docx==1.1.2
 
 info "SQLite DB 초기화"
@@ -84,25 +100,32 @@ con.close()
 print("DB 초기화 완료")
 PY
 
-# Reuse Gemini key from legal-books if exists
+# Local embedding endpoint config (OpenAI-compatible)
 SECRETS="$HOME/.jurisupport/secrets.env"
-if [[ ! -f "$SECRETS" ]] || ! grep -q "GEMINI_API_KEY" "$SECRETS"; then
-  mkdir -p "$(dirname "$SECRETS")"; chmod 700 "$(dirname "$SECRETS")"
-  echo ""
-  echo "Gemini API 키 미등록 (임베딩에 사용)."
-  echo "무료 키 발급: https://aistudio.google.com/apikey"
-  read -r -p "Gemini API 키 입력 (건너뛰려면 Enter): " GEMINI_KEY
-  if [[ -n "${GEMINI_KEY:-}" ]]; then
-    echo "GEMINI_API_KEY=${GEMINI_KEY}" >> "$SECRETS"
-    chmod 600 "$SECRETS"
+mkdir -p "$(dirname "$SECRETS")"; chmod 700 "$(dirname "$SECRETS")"
+touch "$SECRETS"; chmod 600 "$SECRETS"
+ensure_secret() {
+  local key="$1" value="$2"
+  if grep -q "^${key}=" "$SECRETS"; then
+    info "${key} 이미 설정됨: $SECRETS"
+  else
+    echo "${key}=${value}" >> "$SECRETS"
+    info "${key} 기본값 저장: ${value}"
   fi
-else
-  info "기존 Gemini API 키 재사용: $SECRETS"
-fi
+}
+ensure_secret "JURISUPPORT_EMBEDDING_PROVIDER" "openai"
+ensure_secret "JURISUPPORT_EMBEDDING_BASE_URL" "http://127.0.0.1:3333/v1"
+ensure_secret "JURISUPPORT_EMBEDDING_MODEL" "local-embedding"
+ensure_secret "JURISUPPORT_EMBEDDING_API_KEY" "no-key-required"
+ensure_secret "JURISUPPORT_CASE_RECORDS_PORT" "18767"
+warn "로컬 엔드포인트가 /v1/embeddings를 제공해야 의미 검색이 작동합니다."
+warn "미지원 시 임시 fallback: JURISUPPORT_EMBEDDING_PROVIDER=hash"
 
 TOOLKIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cp "$TOOLKIT_DIR/server/server.py" "$ROOT/server/server.py"
+cp "$TOOLKIT_DIR/../shared/embedding_provider.py" "$ROOT/server/embedding_provider.py"
 cp "$TOOLKIT_DIR/scripts/"*.{sh,py} "$ROOT/scripts/"
+cp "$TOOLKIT_DIR/../shared/embedding_provider.py" "$ROOT/scripts/embedding_provider.py"
 chmod +x "$ROOT/scripts/"*.sh
 
 # Install skill
@@ -113,8 +136,10 @@ cp "$TOOLKIT_DIR/../../skills/case-records/SKILL.md" "$SKILL_DST/SKILL.md"
 # Start server
 "$ROOT/scripts/server.sh" start
 sleep 2
-if curl -sf http://localhost:8767/health >/dev/null; then
-  info "서버 실행 중 (포트 8767)"
+CASE_RECORDS_PORT=$(grep -E "^JURISUPPORT_CASE_RECORDS_PORT=" "$SECRETS" | tail -1 | cut -d= -f2-)
+CASE_RECORDS_PORT="${CASE_RECORDS_PORT:-18767}"
+if curl -sf "http://localhost:${CASE_RECORDS_PORT}/health" >/dev/null; then
+  info "서버 실행 중 (포트 ${CASE_RECORDS_PORT})"
 else
   warn "서버 시작 실패. 로그 확인: $ROOT/logs/server.log"
 fi
@@ -137,7 +162,7 @@ cat <<EOF
        ~/case-records/scripts/ingest_all.sh --root ~/사건
 
   3. 검색 테스트:
-       curl -X POST http://localhost:8767/search \\
+       curl -X POST http://localhost:18767/search \\
          -H 'Content-Type: application/json' \\
          -d '{"query":"보증금","top_k":3}'
 

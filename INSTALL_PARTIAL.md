@@ -62,7 +62,7 @@ bash toolkit/legal-books/install.sh
 ```
 
 설치 후:
-- 검색 서버 (포트 8766) 자동 시작
+- 검색 서버 (포트 18766) 자동 시작
 - 책 한 권 추가 → `~/legal-books/scripts/add_book.sh ...`
 - 가이드: `guides/02_book_scanning.md`
 
@@ -75,7 +75,7 @@ bash toolkit/case-records/install.sh
 ```
 
 설치 후:
-- 검색 서버 (포트 8767)
+- 검색 서버 (포트 18767)
 - 사건 추가 → `~/case-records/scripts/ingest_case.sh ...`
 - 일괄 인덱싱 → `~/case-records/scripts/ingest_all.sh --root ~/사건`
 - 가이드: `guides/03_case_records.md`
@@ -89,5 +89,5 @@ bash toolkit/case-records/install.sh
 # 스킬 제거: rm -rf ~/.claude/skills/{lbox-guide,beopgoeul-guide,legal-books,case-records}
 # 플러그인 제거: rm ~/.claude/plugins/cache/jurisupport-plugins/songmu-legal
 # 서버 제거: rm -rf ~/legal-books ~/case-records
-# Secrets: rm -rf ~/.jurisupport (Gemini API 키 등)
+# Secrets: rm -rf ~/.jurisupport (로컬 임베딩 엔드포인트 설정 등)
 ```

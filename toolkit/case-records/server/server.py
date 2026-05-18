@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""case-records search API (port 8767). Hybrid FTS5 + cosine."""
+"""case-records search API (default port 18767). Hybrid FTS5 + cosine."""
 
 import os, sqlite3
 from pathlib import Path
@@ -22,12 +22,11 @@ def db():
 
 
 def embed(q: str) -> np.ndarray:
-    from google import genai
-    key = os.environ.get("GEMINI_API_KEY") or ""
-    if not key: raise HTTPException(500, "GEMINI_API_KEY not set")
-    client = genai.Client(api_key=key)
-    r = client.models.embed_content(model="text-embedding-004", contents=[q])
-    return np.array(r.embeddings[0].values, dtype=np.float32)
+    try:
+        from embedding_provider import embed_text
+        return np.array(embed_text(q), dtype=np.float32)
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
 
 
 def cos(a, b):
@@ -133,4 +132,5 @@ def search(req: Req):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8767)
+    port = int(os.environ.get("JURISUPPORT_CASE_RECORDS_PORT", "18767"))
+    uvicorn.run(app, host="127.0.0.1", port=port)

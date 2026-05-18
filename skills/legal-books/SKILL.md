@@ -1,6 +1,6 @@
 ---
 name: legal-books
-description: 사무소 보유 법률서적(교과서)을 하이브리드 검색하여 출처와 함께 인용. 로컬 SQLite + Gemini 임베딩 기반. 책이 0권일 때는 검색 시도하지 말고 사용자에게 추가 안내.
+description: 사무소 보유 법률서적(교과서)을 하이브리드 검색하여 출처와 함께 인용. 로컬 SQLite + 로컬 OpenAI-compatible 임베딩 기반. 책이 0권일 때는 검색 시도하지 말고 사용자에게 추가 안내.
 license: MIT
 metadata:
   category: legal
@@ -23,7 +23,7 @@ metadata:
 검색 전 반드시 서버 상태 확인:
 
 ```bash
-curl -s http://localhost:8766/health
+curl -s http://localhost:18766/health
 ```
 
 - 서버 미응답 → 사용자에게 서버 실행 요청
@@ -33,7 +33,7 @@ curl -s http://localhost:8766/health
 ## 검색 API
 
 ```bash
-curl -s -X POST http://localhost:8766/search \
+curl -s -X POST http://localhost:18766/search \
   -H "Content-Type: application/json" \
   -d '{"query": "검색어", "top_k": 5}'
 ```

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# case-records search server (port 8767)
+# case-records search server (default port 18767)
 
 set -euo pipefail
 
@@ -7,6 +7,14 @@ ROOT="$HOME/case-records"
 VENV="$ROOT/.venv/bin/activate"
 PIDFILE="$ROOT/logs/server.pid"
 LOGFILE="$ROOT/logs/server.log"
+SECRETS="$HOME/.jurisupport/secrets.env"
+if [[ -f "$SECRETS" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$SECRETS"
+  set +a
+fi
+PORT="${JURISUPPORT_CASE_RECORDS_PORT:-18767}"
 
 start() {
   if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
@@ -28,7 +36,7 @@ stop() {
 status() {
   if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
     echo "Running PID $(cat "$PIDFILE")"
-    curl -s http://localhost:8767/health || true
+    curl -s "http://localhost:${PORT}/health" || true
   else echo "Not running"; fi
 }
 

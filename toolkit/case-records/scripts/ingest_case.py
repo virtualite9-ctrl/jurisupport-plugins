@@ -82,18 +82,9 @@ def chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP):
 
 
 def embed_batch(texts: list[str]) -> list[list[float]]:
-    from google import genai
-    key = os.environ.get("GEMINI_API_KEY")
-    if not key:
-        raise RuntimeError("GEMINI_API_KEY not set in ~/.jurisupport/secrets.env")
-    client = genai.Client(api_key=key)
-    out = []
-    for i in range(0, len(texts), 100):
-        batch = texts[i:i + 100]
-        r = client.models.embed_content(model="text-embedding-004", contents=batch)
-        out.extend([e.values for e in r.embeddings])
-        time.sleep(0.5)
-    return out
+    from embedding_provider import embed_texts
+
+    return embed_texts(texts)
 
 
 def main():
